@@ -1,20 +1,21 @@
-name: Monitor de Licitações
+name: Relatório Diário de Licitações
 
 on:
   schedule:
-    # Roda a cada 3 horas automaticamente
-    - cron: '0 */3 * * *'
-  workflow_dispatch: # Permite que você clique em um botão para rodar manualmente quando quiser
+    # Roda às 09:00 da manhã (12:00 UTC) e às 20:20 da noite (23:20 UTC) no horário de Brasília
+    - cron: '0 12 * * *'
+    - cron: '20 23 * * *'
+  workflow_dispatch: # Permite testar manualmente a qualquer momento
 
 jobs:
   executar-bot:
     runs-on: ubuntu-latest
     steps:
       - name: Copiar código do repositório
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Configurar Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
