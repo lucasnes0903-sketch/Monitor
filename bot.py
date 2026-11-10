@@ -1,6 +1,6 @@
 import os
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # ==========================================
 # SUA LISTA DE ITENS PARA MONITORAR
@@ -8,13 +8,15 @@ from datetime import datetime, timedelta
 TERMOS_BUSCA = [
     "lâmpada", 
     "toner", 
+    "luvas de procedimento", 
+    "álcool em gel"
 ]
 
 def buscar_compras():
     url = "https://pncp.gov.br/api/search"
     compras_encontradas = []
     
-    print("Iniciando varredura no Portal de Compras...")
+    print("Iniciando varredura diária no Portal de Compras...")
     
     for termo in TERMOS_BUSCA:
         params = {
@@ -32,11 +34,22 @@ def buscar_compras():
                 for item in dados.get("items", []):
                     objeto = item.get("objeto", "").lower()
                     if termo.lower() in objeto:
+                        # Extrai informações solicitadas
+                        orgao_nome = item.get("orgaoNome", "Órgão não informado")
+                        uasg = item.get("unidadeCompradora", {}).get("codigoUnidade", "UASG não informada")
+                        numero_compra = item.get("numeroCompra", "N/A")
+                        ano_compra = item.get("anoCompra", "")
+                        modalidade = item.get("modalidadeNome", "Pregão/Dispensa")
+                        
+                        # Formata identificador do pregão/dispensa
+                        identificador = f"{numero_compra}/{ano_compra}" if ano_compra else numero_compra
+                        
                         compras_encontradas.append({
                             "termo": termo,
-                            "orgao": item.get("orgaoNome", "Órgão não informado"),
-                            "modalidade": item.get("modalidadeNome", "Pregão/Dispensa"),
-                            "objeto": item.get("objeto"),
+                            "modalidade": modalidade,
+                            "identificador": identificador,
+                            "uasg": uasg,
+                            "orgao": orgao_nome,
                             "link": item.get("linkSistemaOrigem") or item.get("uri") or "https://compras.gov.br"
                         })
         except Exception as e:
@@ -45,27 +58,28 @@ def buscar_compras():
     return compras_encontradas
 
 def enviar_alerta_discord(compras):
-    
+    # Cole aqui a URL completa do Webhook do seu Discord entre as aspas
     webhook_url = "https://discord.com/api/webhooks/1569842977470414938/MzlRqaOxTaR_gZiIjq2buGTQW95kycdzPP4kaxrV66Ib5H1Yp5eU94vH3gzfeTLe7BmT"
     
     if not compras:
-        print("Nenhuma nova compra encontrada nesta execução.")
+        mensagem = {"content": "📋 **Relatório Diário:** Nenhuma nova compra ativa encontrada hoje para os termos monitorados."}
+        requests.post(webhook_url, json=mensagem)
         return
 
+    # Cabeçalho da listagem
+    cabecalho = f"🌅 **BOM DIA! Aqui estão as oportunidades ativas encontradas hoje ({datetime.now().strftime('%d/%m/%Y')}):**\n"
+    requests.post(webhook_url, json={"content": cabecalho})
+
+    # Envia cada item em formato de lista simples e limpa
     for compra in compras:
-        mensagem = {
-            "content": (
-                f"🚨 **Oportunidade Encontrada!** `[{compra['termo'].upper()}]`\n"
-                f"🏢 **Órgão:** {compra['orgao']}\n"
-                f"📋 **Modalidade:** {compra['modalidade']}\n"
-                f"📦 **Objeto:** {compra['objeto']}\n"
-                f"🔗 **Link:** {compra['link']}"
-            )
-        }
-        
-        resposta = requests.post(webhook_url, json=mensagem)
-        if resposta.status_code == 204:
-            print(f"Alerta enviado com sucesso para o termo: {compra['termo']}")
+        texto_item = (
+            f"🔹 **Item:** `{compra['termo'].upper()}`\n"
+            f"📋 **{compra['modalidade']} Nº:** `{compra['identificador']}`\n"
+            f"🏛️ **UASG (Órgão):** `{compra['uasg']}` — *{compra['orgao']}*\n"
+            f"🔗 **Link Direto:** {compra['link']}\n"
+            f"-----------------------------------"
+        )
+        requests.post(webhook_url, json={"content": texto_item})
 
 if __name__ == "__main__":
     resultados = buscar_compras()
